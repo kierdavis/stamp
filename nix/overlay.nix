@@ -68,10 +68,16 @@ self: super: with self; {
       , cmd ? null
       , targetLayerSize ? defaultTargetLayerSize # bytes
       , withRegistration ? false
+      , withConveniences ? true
       , passthru ? {}
       }:
       let
-        storeRoots = builtins.map (x: x.target) symlink
+        symlink' = symlink ++ lib.optionals withConveniences [
+          { link = "/bin/bash"; target = "sh"; }
+          { link = "/bin/sh"; target = "${bash}/bin/sh"; }
+          { link = "/etc/ssl/certs/ca-bundle.crt"; target = "${cacert}/etc/ssl/certs/ca-bundle.crt"; }
+        ];
+        storeRoots = builtins.map (x: x.target) symlink'
           ++ lib.mapAttrsToList (_: val: val) env
           ++ (if entrypoint != null then entrypoint else [])
           ++ (if cmd != null then cmd else []);
@@ -94,7 +100,7 @@ self: super: with self; {
           dest = x.link;
           owner = x.owner or 0;
           group = x.group or 0;
-        }) symlink;
+        }) symlink';
         copyRegistration = lib.optional withRegistration {
           src = "${closureInfo { rootPaths = storeRoots; }}/registration";
           dest = "/nix-path-registration";
