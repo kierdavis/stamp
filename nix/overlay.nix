@@ -3,10 +3,14 @@ let
 
   # Given a string, return a (non unique) list of all the top-level Nix
   # store paths mentioned in the string.
-  findStorePaths = str:
-    builtins.map (groups: builtins.elemAt groups 0)
-      (builtins.filter builtins.isList
-        (builtins.split "(${builtins.storeDir}/[0-9a-z]{32}-[-.+_?=0-9a-zA-Z]+)" str));
+  findStorePaths = str: let
+    ctx = builtins.getContext str;
+    # "foo /nix/store/aaa-foo/bar" -> [ "foo " [ "/nix/store/aaa-foo" ] "/bar" ]
+    split = builtins.split "(${builtins.storeDir}/[0-9a-z]{32}-[-.+_?=0-9a-zA-Z]+)" str;
+    # -> [ "/nix/store/aaa-foo" ]
+    paths = builtins.map (groups: builtins.elemAt groups 0) (builtins.filter builtins.isList split);
+  in builtins.map (path: builtins.appendContext path ctx) paths;
+
 in
 
 self: super: with self; {
