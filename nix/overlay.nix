@@ -67,7 +67,7 @@ self: super: with self; {
       , entrypoint ? null
       , cmd ? null
       , targetLayerSize ? defaultTargetLayerSize # bytes
-      , withRegistration ? true
+      , withRegistration ? false
       , passthru ? {}
       }:
       let
