@@ -25,7 +25,7 @@ variable "repo" {
 }
 
 data "external" "derivation" {
-  program = ["${path.module}/derivation.sh"]
+  program = ["${path.module}/tf-support/derivation.sh"]
   query = { flake = var.flake }
 }
 
@@ -37,7 +37,7 @@ locals {
 resource "terraform_data" "build_and_push" {
   triggers_replace = local.repo_tag
   provisioner "local-exec" {
-    command = "exec ${path.module}/build_and_push.sh"
+    command = "exec ${path.module}/tf-support/build-and-push.sh"
     environment = merge(data.external.derivation.result, { repo_tag = local.repo_tag })
   }
 }
