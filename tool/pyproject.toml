@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stamptool"
+version = "0.1"
+requires-python = ">=3.6"
+
+[[project.authors]]
+name = "Kier Davis"
+email = "me@kierdavis.com"
+
+[project.scripts]
+stamptool = "stamptool.main:main"
+
+[project.urls]
+Repository = "https://github.com/kierdavis/stamp"
+
+[tool.setuptools]
+packages = ["stamptool"]
