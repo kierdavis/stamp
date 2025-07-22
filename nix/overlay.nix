@@ -14,7 +14,7 @@ self: super: with self; {
     tool = callPackage ../tool {};
 
     fetch =
-      { name ? "stamp-img-${lib.strings.sanitizeDerivationName repository}"
+      { name ? "stamp-img-${lib.sanitizeDerivationName repository}"
       , repository
       , digest
       , hash
@@ -97,13 +97,13 @@ self: super: with self; {
         };
         mkStoreLayer = fileName: _: let
           pathsFile = "${packingPlan}/${fileName}";
-          paths = builtins.filter (x: x != "") (lib.strings.splitString "\n" (builtins.readFile pathsFile));
+          paths = builtins.filter (x: x != "") (lib.splitString "\n" (builtins.readFile pathsFile));
         in stamp.tool.layer {
           name = "stamp-layer-nix-store";
           copy = builtins.map (p: { src = p; dest = p; owner = 0; group = 0; }) paths;
           passthru = { inherit pathsFile paths; };
         };
-        storeLayers = lib.attrsets.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
+        storeLayers = lib.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
         copySymlinks = map (x: {
           src = runCommand "symlink" { inherit (x) target; } ''ln -sfT "$target" "$out"'';
           dest = x.link;
