@@ -9,6 +9,7 @@ drv_path=$(
   path-info \
   --derivation \
   --override-input stamp "path:$stamp_dir" \
+  --show-trace \
   "$flake"
 )
 jq --raw-input --compact-output '{drv_path:.,tag:.|ltrimstr("/nix/store/")|split("-")|.[0]}' <<<"$drv_path"
