@@ -1,5 +1,12 @@
 let
   defaultTargetLayerSize = 128 * 1024 * 1024; # bytes
+
+  # Given a string, return a (non unique) list of all the top-level Nix
+  # store paths mentioned in the string.
+  findStorePaths = str:
+    builtins.map (groups: builtins.elemAt groups 0)
+      (builtins.filter builtins.isList
+        (builtins.split "(${builtins.storeDir}/[0-9a-z]{32}-[-.+_?=0-9a-zA-Z]+)" str));
 in
 
 self: super: with self; {
@@ -77,10 +84,12 @@ self: super: with self; {
           { link = "/bin/sh"; target = "${bash}/bin/sh"; }
           { link = "/etc/ssl/certs/ca-bundle.crt"; target = "${cacert}/etc/ssl/certs/ca-bundle.crt"; }
         ];
-        storeRoots = builtins.map (x: x.target) symlink'
+        storeRoots = lib.concatMap findStorePaths (
+          builtins.map (x: x.target) symlink'
           ++ lib.mapAttrsToList (_: val: val) env
           ++ (if entrypoint != null then entrypoint else [])
-          ++ (if cmd != null then cmd else []);
+          ++ (if cmd != null then cmd else [])
+        );
         packingPlan = stamp.tool.nixPackingPlan {
           inherit targetLayerSize;
           name = "${name}-packing-plan";
