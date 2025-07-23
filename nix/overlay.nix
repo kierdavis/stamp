@@ -85,10 +85,12 @@ self: super: with self; {
       }:
       let
         runOnHost' = lib.optionalString withConveniences ''
-          mkdir -p bin etc/ssl/certs tmp
+          mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp
           ln -sfT sh bin/bash
           ln -sfT "${bash}/bin/sh" bin/sh
-          ln -sfT "${cacert}/etc/ssl/certs/ca-bundle.crt" etc/ssl/certs/ca-bundle.crt
+          for x in etc/{ssl/certs/ca-{bundle,certificates}.crt,pki/tls/certs/ca-bundle.crt}; do
+            ln -sfT "${cacert}/etc/ssl/certs/ca-bundle.crt" "$x"
+          done
         '' + runOnHost;
         storeRoots = lib.concatMap findStorePaths (
           [ runOnHost' ]
