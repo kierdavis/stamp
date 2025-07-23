@@ -106,15 +106,13 @@ self: super: with self; {
           paths = builtins.filter (x: x != "") (lib.splitString "\n" (builtins.readFile pathsFile));
         in stamp.tool.layer {
           name = "stamp-layer-nix-store";
-          copy = builtins.map (p: { src = p; dest = p; owner = 0; group = 0; }) paths;
+          copy = builtins.map (p: { src = p; dest = p; }) paths;
           passthru = { inherit pathsFile paths; };
         };
         storeLayers = lib.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
         registrationCopy = lib.optional withRegistration {
           src = "${closureInfo { rootPaths = storeRoots; }}/registration";
           dest = "/nix-path-registration";
-          owner = 0;
-          group = 0;
         };
       in stamp.patch {
         inherit name env entrypoint cmd;
