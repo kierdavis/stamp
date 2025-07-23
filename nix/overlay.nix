@@ -85,12 +85,16 @@ self: super: with self; {
       }:
       let
         runOnHost' = lib.optionalString withConveniences ''
-          mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp
-          ln -sfT sh bin/bash
-          ln -sfT "${bash}/bin/sh" bin/sh
+          mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp usr
+          for x in "${busybox}/bin/"*; do
+            ln -sf "$x" -t bin
+          done
+          ln -sfT "${bash}/bin/bash" bin/bash
+          ln -sfT "${bash}/bin/bash" bin/sh
           for x in etc/{ssl/certs/ca-{bundle,certificates}.crt,pki/tls/certs/ca-bundle.crt}; do
             ln -sfT "${cacert}/etc/ssl/certs/ca-bundle.crt" "$x"
           done
+          ln -sfT ../bin usr/bin
         '' + runOnHost;
         storeRoots = lib.concatMap findStorePaths (
           [ runOnHost' ]
