@@ -1,4 +1,5 @@
-{ coreutils
+{ bash
+, coreutils
 , gnutar
 , pigz
 , python3
@@ -13,7 +14,7 @@ let
     src = builtins.filterSource (path: type: baseNameOf path != "default.nix") ./.;
     build-system = with python3.pkgs; [ setuptools ];
     nativeCheckInputs = with python3.pkgs; [ pytestCheckHook testfixtures ] ++ propagatedBuildInputs;
-    propagatedBuildInputs = [ coreutils gnutar pigz ];
+    propagatedBuildInputs = [ bash coreutils gnutar pigz ];
 
     passthru = {
       extractDiffs =
@@ -34,10 +35,11 @@ let
       layer =
         { name ? "stamp-layer"
         , copy ? []
+        , runOnHost ? ""
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name copy passthru;
+          inherit name copy runOnHost passthru;
           __structuredAttrs = true;
           outputs = [ "out" "diff" ];
           nativeBuildInputs = [ self ];

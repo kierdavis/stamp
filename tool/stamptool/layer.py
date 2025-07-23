@@ -15,28 +15,17 @@ def main(deriv_attrs):
   source_date_epoch = os.environ["SOURCE_DATE_EPOCH"]
 
   for entry in deriv_attrs.get("copy", []):
-    src = pathlib.Path(entry["src"]).absolute()
-    dest = pathlib.PurePath(entry["dest"])
-    assert dest.is_absolute()
-    owner = entry.get("owner", 0)
-    group = entry.get("group", owner)
-    opts = [
-      "--append",
-      "--directory=/",
-      f"--file={tar_path}",
-      f"--owner={owner}",
-      f"--group={group}",
-      f"--mtime=@{source_date_epoch}",
-      "--sort=name",
-    ]
-    if _is_numeric(owner):
-      opts.append("--numeric-owner")
-    if src != dest:
-      opts.append("--transform=s|^" + str(src.relative_to("/")).replace("|", "\\|") + "|" + str(dest.relative_to("/")).replace("|", "\\|") + "|")
-    subprocess.run(
-      ["tar"] + opts + [str(src.relative_to("/"))],
-      check=True,
+    append_to_tar(
+      tar_path=tar_path,
+      src_path=pathlib.Path(entry["src"]).absolute(),
+      dest_path=pathlib.PurePath(entry["dest"]),
+      owner=entry.get("owner"),
+      group=entry.get("group"),
+      mtime=entry.get("mtime"),
     )
+
+  if deriv_attrs.get("runOnHost"):
+    run_on_host(tar_path, deriv_attrs["runOnHost"])
 
   n_cores = os.environ.get("NIX_BUILD_CORES", "1")
   diff_digest_proc = subprocess.Popen(
@@ -74,6 +63,64 @@ def main(deriv_attrs):
 
   diff_digest = b"sha256:" + diff_digest_proc.stdout.read().split()[0]
   (diff_dir / "digest").write_bytes(diff_digest)
+
+
+def run_on_host(
+  tar_path,
+  script,
+):
+  workdir = pathlib.Path("run-on-host")
+  workdir.mkdir(parents=True, exist_ok=True)
+  subprocess.run(
+    ["bash", "-e"],
+    cwd=workdir,
+    input=script,
+    encoding="utf-8",
+    check=True,
+  )
+  append_to_tar(
+    tar_path=tar_path,
+    src_path=workdir,
+    dest_path=pathlib.PurePath("/"),
+  )
+
+
+def append_to_tar(
+  tar_path,
+  src_path,
+  dest_path,
+  owner=None,
+  group=None,
+  mtime=None,
+):
+  if owner is None:
+    owner = 0
+  if group is None:
+    group = owner
+  if mtime is None:
+    mtime = int(os.environ["SOURCE_DATE_EPOCH"])
+  cmd = [
+    "tar",
+    "--append",
+    f"--file={tar_path}",
+    f"--owner={owner}",
+    f"--group={group}",
+    f"--mtime=@{mtime}",
+    "--sort=name",
+  ]
+  if _is_numeric(owner):
+    cmd.append("--numeric-owner")
+
+  assert dest_path.is_absolute()
+  if dest_path == pathlib.PurePath("/"):
+    cmd += [f"--directory={src_path}"] + [x.name for x in src_path.iterdir()]
+  else:
+    cmd += [
+      "--directory=/",
+      "--transform=s|^" + str(src_path.relative_to("/")).replace("|", "\\|") + "|" + str(dest_path.relative_to("/")).replace("|", "\\|") + "|",
+      str(src_path.relative_to("/")),
+    ]
+  subprocess.run(cmd, check=True)
 
 
 def _is_numeric(val):

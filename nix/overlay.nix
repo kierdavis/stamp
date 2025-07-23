@@ -46,14 +46,15 @@ self: super: with self; {
       , base ? null
       , appendLayers ? []
       , copy ? []
+      , runOnHost ? ""
       , env ? {}
       , entrypoint ? null
       , cmd ? null
       , passthru ? {}
       }:
       let
-        implicitLayer = if builtins.length copy != 0
-          then stamp.tool.layer { inherit copy; name = "${name}-newlayer"; }
+        implicitLayer = if copy != [] || runOnHost != ""
+          then stamp.tool.layer { inherit copy runOnHost; name = "${name}-newlayer"; }
           else null;
         appendLayers' = builtins.map (lay: { blob = lay.out; diff = lay.diff; })
           (appendLayers ++ lib.optional (implicitLayer != null) implicitLayer);
@@ -73,7 +74,7 @@ self: super: with self; {
 
     fromNix =
       { name ? "stamp-img-nix"
-      , symlink ? []
+      , runOnHost ? ""
       , env ? {}
       , entrypoint ? null
       , cmd ? null
@@ -83,13 +84,14 @@ self: super: with self; {
       , passthru ? {}
       }:
       let
-        symlink' = symlink ++ lib.optionals withConveniences [
-          { link = "/bin/bash"; target = "sh"; }
-          { link = "/bin/sh"; target = "${bash}/bin/sh"; }
-          { link = "/etc/ssl/certs/ca-bundle.crt"; target = "${cacert}/etc/ssl/certs/ca-bundle.crt"; }
-        ];
+        runOnHost' = lib.optionalString withConveniences ''
+          mkdir -p bin etc/ssl/certs tmp
+          ln -sfT sh bin/bash
+          ln -sfT "${bash}/bin/sh" bin/sh
+          ln -sfT "${cacert}/etc/ssl/certs/ca-bundle.crt" etc/ssl/certs/ca-bundle.crt
+        '' + runOnHost;
         storeRoots = lib.concatMap findStorePaths (
-          builtins.map (x: x.target) symlink'
+          [ runOnHost' ]
           ++ lib.mapAttrsToList (_: val: val) env
           ++ (if entrypoint != null then entrypoint else [])
           ++ (if cmd != null then cmd else [])
@@ -108,13 +110,7 @@ self: super: with self; {
           passthru = { inherit pathsFile paths; };
         };
         storeLayers = lib.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
-        copySymlinks = map (x: {
-          src = runCommand "symlink" { inherit (x) target; } ''ln -sfT "$target" "$out"'';
-          dest = x.link;
-          owner = x.owner or 0;
-          group = x.group or 0;
-        }) symlink';
-        copyRegistration = lib.optional withRegistration {
+        registrationCopy = lib.optional withRegistration {
           src = "${closureInfo { rootPaths = storeRoots; }}/registration";
           dest = "/nix-path-registration";
           owner = 0;
@@ -123,7 +119,8 @@ self: super: with self; {
       in stamp.patch {
         inherit name env entrypoint cmd;
         appendLayers = storeLayers;
-        copy = copySymlinks ++ copyRegistration;
+        copy = registrationCopy;
+        runOnHost = runOnHost';
         passthru = { inherit storeRoots packingPlan storeLayers; } // passthru;
       };
   };
