@@ -68,6 +68,30 @@ def compare_tar_entries(tar_path, expected):
   compare(got, expected=expected)
 
 
+class chdir:
+  """
+  Context manager for temporarily overriding the current working directory.
+  """
+
+  def __init__(self, value, mkdir=False):
+    self._value = value
+    self._mkdir = mkdir
+    self._saved = None
+
+  def __enter__(self):
+    assert self._saved is None
+    if self._mkdir:
+      pathlib.Path(self._value).mkdir(parents=True, exist_ok=True)
+    self._saved = pathlib.Path.cwd()
+    os.chdir(self._value)
+    return self._value
+
+  def __exit__(self, *exc_info):
+    assert self._saved is not None
+    os.chdir(self._saved)
+    self._saved = None
+
+
 class environment:
   """
   Context manager for temporarily overriding the current process's environment
@@ -83,7 +107,7 @@ class environment:
     self._saved = {}
     for name, value in self._values.items():
       self._saved[name] = os.environ[name]
-      os.environ[name] = value
+      os.environ[name] = str(value)
     return self
 
   def __exit__(self, *exc_info):

@@ -17,5 +17,8 @@ stamptool = "stamptool.main:main"
 [project.urls]
 Repository = "https://github.com/kierdavis/stamp"
 
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+
 [tool.setuptools]
 packages = ["stamptool"]

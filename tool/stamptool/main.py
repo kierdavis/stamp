@@ -1,13 +1,15 @@
 import json
 import os
 import sys
-from . import extract_diffs, layer, nix_packing_plan, patch
+from . import extract_diffs, layer_blob, layer_diff, nix_packing_plan, nix_store_layer_diff, patch
 
 
 CMD_FUNCS = {
   "extract-diffs": extract_diffs.main,
-  "layer": layer.main,
+  "layer-blob": layer_blob.main,
+  "layer-diff": layer_diff.main,
   "nix-packing-plan": nix_packing_plan.main,
+  "nix-store-layer-diff": nix_store_layer_diff.main,
   "patch-diffs": patch.diffs_main,
   "patch-oci": patch.oci_main,
 }

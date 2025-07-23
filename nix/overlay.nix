@@ -1,21 +1,10 @@
-let
-  defaultTargetLayerSize = 128 * 1024 * 1024; # bytes
+self: super:
 
-  # Given a string, return a (non unique) list of all the top-level Nix
-  # store paths mentioned in the string.
-  findStorePaths = str: let
-    ctx = builtins.getContext str;
-    # "foo /nix/store/aaa-foo/bar" -> [ "foo " [ "/nix/store/aaa-foo" ] "/bar" ]
-    split = builtins.split "(${builtins.storeDir}/[0-9a-z]{32}-[-.+_?=0-9a-zA-Z]+)" str;
-    # -> [ "/nix/store/aaa-foo" ]
-    paths = builtins.map (groups: builtins.elemAt groups 0) (builtins.filter builtins.isList split);
-  in builtins.map (path: builtins.appendContext path ctx) paths;
+with self;
 
-in
-
-self: super: with self; {
+{
   stamp = {
-    tool = callPackage ../tool {};
+    defaultTargetLayerSize = 128 * 1024 * 1024; # bytes
 
     fetch =
       { name ? "stamp-img-${lib.strings.sanitizeDerivationName repository}"
@@ -34,7 +23,7 @@ self: super: with self; {
           outputHashMode = "recursive";
           passthru = passthru';
         };
-        diffs = stamp.tool.extractDiffs {
+        diffs = stamp.internal.tool.extractDiffs {
           inherit oci;
           name = "${name}-diffs";
           passthru = passthru';
@@ -42,29 +31,40 @@ self: super: with self; {
       in oci;
 
     patch =
-      { name ? (if base != null then "${base.name}-patch" else "stamp-img")
+      { name ? stamp.internal.defaultPatchDrvName base
       , base ? null
       , appendLayers ? []
       , copy ? []
       , runOnHost ? ""
+      , runOnHostUID ? 0
+      , runOnHostGID ? runOnHostUID
+      , runInContainer ? ""
       , env ? {}
       , entrypoint ? null
       , cmd ? null
+      , vmDiskSize ? 2048 # MB
+      , vmMemory ? 512    # MB
+      , layerHash ? null
       , passthru ? {}
       }:
       let
-        implicitLayer = if copy != [] || runOnHost != ""
-          then stamp.tool.layer { inherit copy runOnHost; name = "${name}-newlayer"; }
+        implicitLayer = if copy != [] || runOnHost != "" || runInContainer != ""
+          then stamp.internal.layer {
+            inherit copy runOnHost runOnHostUID runOnHostGID runInContainer vmDiskSize vmMemory;
+            name = "${name}-layer";
+            runInContainerBase = if runInContainer != "" then base else null;
+            hash = layerHash;
+          }
           else null;
-        appendLayers' = builtins.map (lay: { blob = lay.out; diff = lay.diff; })
+        appendLayers' = builtins.map (lay: { inherit (lay) blob diff; })
           (appendLayers ++ lib.optional (implicitLayer != null) implicitLayer);
         passthru' = { inherit oci diffs implicitLayer; } // passthru;
-        oci = stamp.tool.patchOCI {
+        oci = stamp.internal.tool.patchOCI {
           inherit name base env entrypoint cmd;
           appendLayers = appendLayers';
           passthru = passthru';
         };
-        diffs = stamp.tool.patchDiffs {
+        diffs = stamp.internal.tool.patchDiffs {
           inherit base;
           name = "${name}-diffs";
           appendLayers = appendLayers';
@@ -75,12 +75,15 @@ self: super: with self; {
     fromNix =
       { name ? "stamp-img-nix"
       , runOnHost ? ""
+      , runInContainer ? ""
       , env ? {}
       , entrypoint ? null
       , cmd ? null
-      , targetLayerSize ? defaultTargetLayerSize # bytes
+      , targetLayerSize ? stamp.defaultTargetLayerSize # bytes
       , withRegistration ? false
       , withConveniences ? true
+      , vmDiskSize ? 2048 # MB
+      , vmMemory ? 512    # MB
       , passthru ? {}
       }:
       let
@@ -99,37 +102,109 @@ self: super: with self; {
             let default = lib.makeBinPath [ bash busybox ];
             in if env ? PATH then "${env.PATH}:${default}" else default;
         };
-        storeRoots = lib.concatMap findStorePaths (
-          [ runOnHost' ]
+        storeRoots = lib.concatMap stamp.internal.findStorePaths (
+          [ runOnHost' runInContainer ]
           ++ lib.mapAttrsToList (_: val: val) env'
           ++ (if entrypoint != null then entrypoint else [])
           ++ (if cmd != null then cmd else [])
         );
-        packingPlan = stamp.tool.nixPackingPlan {
+        packingPlan = stamp.internal.tool.nixPackingPlan {
           inherit targetLayerSize;
           name = "${name}-packing-plan";
           roots = storeRoots;
         };
         mkStoreLayer = fileName: _: let
           pathsFile = "${packingPlan}/${fileName}";
+        in stamp.internal.nixStoreLayer {
           paths = builtins.filter (x: x != "") (lib.splitString "\n" (builtins.readFile pathsFile));
-        in stamp.tool.layer {
-          name = "stamp-layer-nix-store";
-          copy = builtins.map (p: { src = p; dest = p; }) paths;
-          passthru = { inherit pathsFile paths; };
+          passthru = { inherit pathsFile; };
         };
         storeLayers = lib.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
-        registrationCopy = lib.optional withRegistration {
+        copy = lib.optional withRegistration {
           src = "${closureInfo { rootPaths = storeRoots; }}/registration";
           dest = "/nix-path-registration";
         };
       in stamp.patch {
-        inherit name entrypoint cmd;
+        inherit name copy runInContainer entrypoint cmd vmDiskSize vmMemory;
         appendLayers = storeLayers;
-        copy = registrationCopy;
         runOnHost = runOnHost';
         env = env';
         passthru = { inherit storeRoots packingPlan storeLayers; } // passthru;
       };
+
+    installDebianPkgs =
+      { name ? stamp.internal.defaultPatchDrvName base
+      , base
+      , pkgs
+      , layerHash ? null
+      , passthru ? {}
+      }:
+      stamp.patch {
+        inherit name base layerHash passthru;
+        copy = builtins.map (src: { inherit src; dest = "/imgbuild/${src.name}"; }) pkgs;
+        runInContainer = ''apt install -y /imgbuild/* && rm -rf /var/cache/ldconfig/aux-cache /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log /imgbuild'';
+      };
+
+    internal = {
+      tool = callPackage ../tool {};
+
+      defaultPatchDrvName = base: if base != null then "${base.name}-patch" else "stamp-img";
+
+      # Given a string, return a (non unique) list of all the top-level Nix
+      # store paths mentioned in the string.
+      findStorePaths = str: let
+        str' = builtins.toString str;
+        ctx = builtins.getContext str';
+        # "foo /nix/store/aaa-foo/bar" -> [ "foo " [ "/nix/store/aaa-foo" ] "/bar" ]
+        split = builtins.split "(${builtins.storeDir}/[0-9a-z]{32}-[-.+_?=0-9a-zA-Z]+)" str';
+        # -> [ "/nix/store/aaa-foo" ]
+        paths = builtins.map (groups: builtins.elemAt groups 0) (builtins.filter builtins.isList split);
+      in builtins.map (path: builtins.appendContext path ctx) paths;
+
+      layer =
+        { name ? "stamp-layer"
+        , copy ? []
+        , runOnHost ? ""
+        , runOnHostUID ? 0
+        , runOnHostGID ? runOnHostUID
+        , runInContainer ? ""
+        , runInContainerBase ? null
+        , vmDiskSize ? 2048 # MB
+        , vmMemory ? 512    # MB
+        , hash ? null
+        , passthru ? {}
+        }:
+        let
+          passthru' = { inherit diff blob; } // passthru;
+          diff = stamp.internal.tool.layerDiff {
+            inherit copy runOnHost runOnHostUID runOnHostGID runInContainer runInContainerBase vmDiskSize vmMemory hash;
+            name = "${name}-diff";
+            passthru = passthru';
+          };
+          blob = stamp.internal.tool.layerBlob {
+            inherit diff;
+            name = "${name}-blob";
+            passthru = passthru';
+          };
+        in diff;
+
+      nixStoreLayer =
+        { paths
+        , passthru ? {}
+        }:
+        let
+          passthru' = { inherit paths diff blob; } // passthru;
+          diff = stamp.internal.tool.nixStoreLayerDiff {
+            inherit paths;
+            name = "stamp-layer-nix-store-diff";
+            passthru = passthru';
+          };
+          blob = stamp.internal.tool.layerBlob {
+            inherit diff;
+            name = "stamp-layer-nix-store-blob";
+            passthru = passthru';
+          };
+        in diff;
+    };
   };
 }

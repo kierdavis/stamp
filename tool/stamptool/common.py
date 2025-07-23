@@ -28,6 +28,10 @@ class PlatformMismatch(Exception):
   pass
 
 
+class StampInternalError(Exception):
+  pass
+
+
 def iter_index_recursive(oci_dir, index_path=None):
   if index_path is None:
     index_path = oci_dir / "index.json"
