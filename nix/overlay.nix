@@ -18,7 +18,7 @@ self: super: with self; {
     tool = callPackage ../tool {};
 
     fetch =
-      { name ? "stamp-img-${lib.sanitizeDerivationName repository}"
+      { name ? "stamp-img-${lib.strings.sanitizeDerivationName repository}"
       , repository
       , digest
       , hash
