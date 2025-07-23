@@ -86,19 +86,22 @@ self: super: with self; {
       let
         runOnHost' = lib.optionalString withConveniences ''
           mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp usr
-          for x in "${busybox}/bin/"*; do
-            ln -sf "$x" -t bin
-          done
           ln -sfT "${bash}/bin/bash" bin/bash
           ln -sfT "${bash}/bin/bash" bin/sh
+          ln -sfT "${busybox}/bin/env" bin/env
           for x in etc/{ssl/certs/ca-{bundle,certificates}.crt,pki/tls/certs/ca-bundle.crt}; do
             ln -sfT "${cacert}/etc/ssl/certs/ca-bundle.crt" "$x"
           done
           ln -sfT ../bin usr/bin
         '' + runOnHost;
+        env' = env // lib.optionalAttrs withConveniences {
+          PATH =
+            let default = lib.makeBinPath [ bash busybox ];
+            in if env ? PATH then "${env.PATH}:${default}" else default;
+        };
         storeRoots = lib.concatMap findStorePaths (
           [ runOnHost' ]
-          ++ lib.mapAttrsToList (_: val: val) env
+          ++ lib.mapAttrsToList (_: val: val) env'
           ++ (if entrypoint != null then entrypoint else [])
           ++ (if cmd != null then cmd else [])
         );
@@ -121,10 +124,11 @@ self: super: with self; {
           dest = "/nix-path-registration";
         };
       in stamp.patch {
-        inherit name env entrypoint cmd;
+        inherit name entrypoint cmd;
         appendLayers = storeLayers;
         copy = registrationCopy;
         runOnHost = runOnHost';
+        env = env';
         passthru = { inherit storeRoots packingPlan storeLayers; } // passthru;
       };
   };
