@@ -24,9 +24,19 @@ variable "repo" {
   EOT
 }
 
+variable "derivation_symlink" {
+  type        = string
+  default     = null
+  description = <<-EOT
+    A path at which to place a symlink to the Nix derivation for building the
+    image, in order to prevent said derivation from being garbage-collected.
+    This is optional but setting it can vastly speed up Terraform plan times.
+  EOT
+}
+
 data "external" "derivation" {
   program = ["${path.module}/tf-support/derivation.sh"]
-  query = { flake = var.flake }
+  query   = { flake = var.flake, symlink = var.derivation_symlink }
 }
 
 locals {
