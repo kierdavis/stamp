@@ -142,7 +142,11 @@ with self;
       stamp.patch {
         inherit name base layerHash passthru;
         copy = builtins.map (src: { inherit src; dest = "/imgbuild/${src.name}"; }) pkgs;
-        runInContainer = ''apt install -y /imgbuild/* && rm -rf /var/cache/ldconfig/aux-cache /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log /imgbuild'';
+        runInContainer = ''
+          apt install -y /imgbuild/*
+          truncate --size=0 /var/cache/ldconfig/aux-cache /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log
+          rm -rf /imgbuild
+        '';
       };
 
     internal = {
