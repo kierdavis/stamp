@@ -143,12 +143,13 @@ let
         , base ? null
         , appendLayers ? []
         , env ? {}
-        , entrypoint ? {}
-        , cmd ? {}
+        , entrypoint ? null
+        , cmd ? null
+        , workingDir ? null
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name base appendLayers env entrypoint cmd passthru;
+          inherit name base appendLayers env entrypoint cmd workingDir passthru;
           __structuredAttrs = true;
           outputs = [ "out" "manifest" "config" ];
           nativeBuildInputs = [ self ];

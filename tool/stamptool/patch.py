@@ -67,6 +67,8 @@ def patch_config(deriv_attrs, manifest, config):
     config.setdefault("config", {})["Entrypoint"] = deriv_attrs["entrypoint"]
   if deriv_attrs.get("cmd") is not None:
     config.setdefault("config", {})["Cmd"] = deriv_attrs["cmd"]
+  if deriv_attrs.get("workingDir") is not None:
+    config.setdefault("config", {})["WorkingDir"] = deriv_attrs["workingDir"]
 
 
 def append_layer(layer_info, manifest, config):

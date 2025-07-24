@@ -22,6 +22,7 @@ def test_patch_oci(testdata, tmp_path):
     },
     "entrypoint": ["mockentrypoint"],
     "cmd": ["mockcmd"],
+    "workingDir": "/mock/working/dir",
     "outputs": {
       "out": str(out_path),
       "manifest": str(manifest_path),
@@ -30,6 +31,7 @@ def test_patch_oci(testdata, tmp_path):
   })
 
   config_bytes = config_path.read_bytes()
+  config_sha256 = hashlib.sha256(config_bytes).hexdigest()
   compare(json.loads(config_bytes), expected={
     "architecture": "amd64",
     "config": {
@@ -41,7 +43,8 @@ def test_patch_oci(testdata, tmp_path):
       ],
       "Labels": {
         "io.buildah.version": "1.37.3"
-      }
+      },
+      "WorkingDir": "/mock/working/dir",
     },
     "created": "2025-07-12T17:51:20.151387201Z",
     "history": [
@@ -62,17 +65,18 @@ def test_patch_oci(testdata, tmp_path):
       "type": "layers"
     }
   })
-  compare(hashlib.sha256(config_bytes).hexdigest(), expected="7b22a011e9e5566be22a1a68fa6c7af68d533dd1b602e7a31d940e1d7a443519")
-  compare(len(config_bytes), expected=614)
+  compare(config_sha256, expected="e05f8a98593f434361df1a00351790211e6d49a9c3f218ce4eab19da44e1b2fe")
+  compare(len(config_bytes), expected=647)
 
   manifest_bytes = manifest_path.read_bytes()
+  manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
   compare(json.loads(manifest_bytes), expected={
     "schemaVersion": 2,
     "mediaType": "application/vnd.oci.image.manifest.v1+json",
     "config": {
       "mediaType": "application/vnd.oci.image.config.v1+json",
-      "digest": "sha256:7b22a011e9e5566be22a1a68fa6c7af68d533dd1b602e7a31d940e1d7a443519",
-      "size": 614,
+      "digest": f"sha256:{config_sha256}",
+      "size": len(config_bytes),
     },
     "layers": [
       {
@@ -91,7 +95,7 @@ def test_patch_oci(testdata, tmp_path):
       "org.opencontainers.image.base.name": ""
     }
   })
-  compare(hashlib.sha256(manifest_bytes).hexdigest(), expected="8b466ccba104a1e17219a741860efae3e8257d2e6aeddf684d7f59d10b77d62a")
+  compare(manifest_sha256, expected="3cb500edc295f65525d1cdf217ee5a1bc060dfe8a1fc0c1d6de78c6c601535ed")
   compare(len(manifest_bytes), expected=653)
 
   [blobs_path, index_path, oci_layout_path] = compare_dir_entries(out_path, expected=["blobs", "index.json", "oci-layout"])
@@ -105,15 +109,15 @@ def test_patch_oci(testdata, tmp_path):
       "mediaType": "application/vnd.oci.image.index.v1+json",
       "manifests": [{
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
-        "digest": "sha256:8b466ccba104a1e17219a741860efae3e8257d2e6aeddf684d7f59d10b77d62a",
-        "size": 653,
+        "digest": f"sha256:{manifest_sha256}",
+        "size": len(manifest_bytes),
       }],
     })
 
   [sha256_path] = compare_dir_entries(blobs_path, expected=["sha256"])
   [config_link_path, manifest_link_path, base_layer_link_path, new_layer_link_path] = compare_dir_entries(sha256_path, [
-    "7b22a011e9e5566be22a1a68fa6c7af68d533dd1b602e7a31d940e1d7a443519", # config
-    "8b466ccba104a1e17219a741860efae3e8257d2e6aeddf684d7f59d10b77d62a", # manifest
+    config_sha256,
+    manifest_sha256,
     "680548d6538925f29b19de954184c7d1f86ef3fb22b90ee3a24eb26143c093fe", # layer blob from base image
     "c23ae081fe7ff8d83d714694c9f579a159cce67807e473c24e0709bb65a8d1a4", # layer blob from appendLayers
   ])
@@ -161,6 +165,7 @@ def test_patch_oci_no_base(testdata, tmp_path):
     },
     "entrypoint": ["mockentrypoint"],
     "cmd": ["mockcmd"],
+    "workingDir": "/mock/working/dir",
     "outputs": {
       "out": str(out_path),
       "manifest": str(manifest_path),
@@ -169,6 +174,7 @@ def test_patch_oci_no_base(testdata, tmp_path):
   })
 
   config_bytes = config_path.read_bytes()
+  config_sha256 = hashlib.sha256(config_bytes).hexdigest()
   compare(json.loads(config_bytes), expected={
     "architecture": "amd64",
     "config": {
@@ -177,7 +183,8 @@ def test_patch_oci_no_base(testdata, tmp_path):
       "Env": [
         "NEWKEY=mockvalue",
         "PATH=mockpath"
-      ]
+      ],
+      "WorkingDir": "/mock/working/dir",
     },
     "history": [
       {
@@ -192,17 +199,18 @@ def test_patch_oci_no_base(testdata, tmp_path):
       "type": "layers"
     }
   })
-  compare(hashlib.sha256(config_bytes).hexdigest(), expected="d27856def4e73db924921419bf20510684f2f9b67b979b296dba3f3936b8772c")
-  compare(len(config_bytes), expected=296)
+  compare(config_sha256, expected="a7ad8bade6fe0adc9783533678890b16fc103ac9ff618c4836c78f6ad71b229b")
+  compare(len(config_bytes), expected=329)
 
   manifest_bytes = manifest_path.read_bytes()
+  manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
   compare(json.loads(manifest_bytes), expected={
     "schemaVersion": 2,
     "mediaType": "application/vnd.oci.image.manifest.v1+json",
     "config": {
       "mediaType": "application/vnd.oci.image.config.v1+json",
-      "digest": "sha256:d27856def4e73db924921419bf20510684f2f9b67b979b296dba3f3936b8772c",
-      "size": 296,
+      "digest": f"sha256:{config_sha256}",
+      "size": len(config_bytes),
     },
     "layers": [
       {
@@ -212,7 +220,7 @@ def test_patch_oci_no_base(testdata, tmp_path):
       }
     ]
   })
-  compare(hashlib.sha256(manifest_bytes).hexdigest(), expected="7963d10db2ff37d0a01987e3ac63fdad88583150f2ab24838191f1e6cc9b6b8e")
+  compare(manifest_sha256, expected="e1900c2198c8e3adbdf6e053e244c3d93d6bbfab04d8c138180b4754ff380dd4")
   compare(len(manifest_bytes), expected=401)
 
   [blobs_path, index_path, oci_layout_path] = compare_dir_entries(out_path, expected=["blobs", "index.json", "oci-layout"])
@@ -226,15 +234,15 @@ def test_patch_oci_no_base(testdata, tmp_path):
       "mediaType": "application/vnd.oci.image.index.v1+json",
       "manifests": [{
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
-        "digest": "sha256:7963d10db2ff37d0a01987e3ac63fdad88583150f2ab24838191f1e6cc9b6b8e",
-        "size": 401,
+        "digest": f"sha256:{manifest_sha256}",
+        "size": len(manifest_bytes),
       }],
     })
 
   [sha256_path] = compare_dir_entries(blobs_path, expected=["sha256"])
   [config_link_path, manifest_link_path, new_layer_link_path] = compare_dir_entries(sha256_path, [
-    "d27856def4e73db924921419bf20510684f2f9b67b979b296dba3f3936b8772c", # config
-    "7963d10db2ff37d0a01987e3ac63fdad88583150f2ab24838191f1e6cc9b6b8e", # manifest
+    config_sha256,
+    manifest_sha256,
     "c23ae081fe7ff8d83d714694c9f579a159cce67807e473c24e0709bb65a8d1a4", # layer blob from appendLayers
   ])
 
