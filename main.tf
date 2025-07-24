@@ -42,6 +42,14 @@ resource "terraform_data" "build_and_push" {
   }
 }
 
+output "derivation" {
+  value = data.external.derivation.result.drv_path
+  description = <<-EOT
+    The Nix derivation for building the image, i.e. the result of evaluating
+    the specified flake output. This is a filename of the form '/nix/store/*.drv'.
+  EOT
+}
+
 output "tag" {
   depends_on = [terraform_data.build_and_push]
   value = local.tag
