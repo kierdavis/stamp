@@ -138,11 +138,13 @@ with self;
       { name ? stamp.internal.defaultPatchDrvName base
       , base
       , pkgs
+      , vmDiskSize ? 2048 # MB
+      , vmMemory ? 512    # MB
       , layerHash ? null
       , passthru ? {}
       }:
       stamp.patch {
-        inherit name base layerHash passthru;
+        inherit name base vmDiskSize vmMemory layerHash passthru;
         copy = builtins.map (src: { inherit src; dest = "/imgbuild/${src.name}"; }) pkgs;
         runInContainer = ''
           apt install -y /imgbuild/*
