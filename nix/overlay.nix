@@ -101,7 +101,7 @@ with self;
         '' + runOnHost;
         env' = env // lib.optionalAttrs withConveniences {
           PATH =
-            let default = lib.makeBinPath [ bash busybox ];
+            let default = lib.makeBinPath [ bash procps busybox ];
             in if env ? PATH then "${env.PATH}:${default}" else default;
         };
         storeRoots = lib.concatMap stamp.internal.findStorePaths (
