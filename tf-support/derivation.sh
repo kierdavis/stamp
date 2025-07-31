@@ -19,7 +19,7 @@ if [[ "$symlink" != null ]]; then
   # XXX: I don't think there's a way to point a GC root at a derivation
   # through the Nix CLI right now, except with this horrible hack.
   # Create a GC root pointing at an arbitrary placeholder store path.
-  nix build --expr 'builtins.toFile "placeholder" ""' --out-link "$symlink"
+  nix --extra-experimental-features nix-command build --expr 'builtins.toFile "placeholder" ""' --out-link "$symlink"
   # Change the symlink to point at what we actually want.
   ln -sfT "$drv_path" "$symlink"
 fi
