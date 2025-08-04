@@ -57,8 +57,7 @@ with self;
             hash = layerHash;
           }
           else null;
-        appendLayers' = builtins.map (lay: { inherit (lay) blob diff; })
-          (appendLayers ++ lib.optional (implicitLayer != null) implicitLayer);
+        appendLayers' = appendLayers ++ lib.optional (implicitLayer != null) implicitLayer;
         passthru' = { inherit oci diffs implicitLayer; } // passthru;
         oci = stamp.internal.tool.patchOCI {
           inherit name base env entrypoint cmd workingDir;
@@ -184,7 +183,7 @@ with self;
         , passthru ? {}
         }:
         let
-          passthru' = { inherit diff blob; } // passthru;
+          passthru' = { inherit diff blob dir; } // passthru;
           diff = stamp.internal.tool.layerDiff {
             inherit copy runOnHost runOnHostUID runOnHostGID runInContainer runInContainerBase vmDiskSize vmMemory hash;
             name = "${name}-diff";
@@ -195,14 +194,24 @@ with self;
             name = "${name}-blob";
             passthru = passthru';
           };
-        in diff;
+          dir = stdenvNoCC.mkDerivation {
+            inherit name diff blob;
+            buildCommand = ''
+              mkdir -p $out/layer
+              ln -sfT $diff $out/layer/diff
+              ln -sfT $blob $out/layer/blob
+            '';
+            preferLocalBuild = true;
+            passthru = passthru';
+          };
+        in dir;
 
       nixStoreLayer =
         { paths
         , passthru ? {}
         }:
         let
-          passthru' = { inherit paths diff blob; } // passthru;
+          passthru' = { inherit paths diff blob dir; } // passthru;
           diff = stamp.internal.tool.nixStoreLayerDiff {
             inherit paths;
             name = "stamp-layer-nix-store-diff";
@@ -213,7 +222,18 @@ with self;
             name = "stamp-layer-nix-store-blob";
             passthru = passthru';
           };
-        in diff;
+          dir = stdenvNoCC.mkDerivation {
+            inherit diff blob;
+            name = "stamp-layer-nix-store";
+            buildCommand = ''
+              mkdir -p $out/layer
+              ln -sfT $diff $out/layer/diff
+              ln -sfT $blob $out/layer/blob
+            '';
+            preferLocalBuild = true;
+            passthru = passthru';
+          };
+        in dir;
     };
   };
 }

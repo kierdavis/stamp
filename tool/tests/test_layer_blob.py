@@ -7,7 +7,7 @@ from .conftest import compare_dir_entries, compare_tar_entries, environment
 def test_layer_blob(testdata, tmp_path):
   out_path = tmp_path / "out"
   layer_blob.main({
-    "diff": str(testdata / "layer1/diff"),
+    "diff": str(testdata / "appendlayers1/layer/diff"),
     "outputs": {"out": str(out_path)},
   })
 

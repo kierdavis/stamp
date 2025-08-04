@@ -1,6 +1,7 @@
 import json
 import hashlib
 import pathlib
+from dataclasses import dataclass
 from .common import load_manifest_and_config, Platform
 
 
@@ -17,8 +18,9 @@ def oci_main(deriv_attrs):
   else:
     manifest, config = EMPTY_MANIFEST, EMPTY_CONFIG
 
-  symlink_new_layer_blobs(deriv_attrs.get("appendLayers", []), out)
-  patch_config(deriv_attrs, manifest, config)
+  new_layers = list(parse_new_layers(deriv_attrs.get("appendLayers", [])))
+  symlink_new_layer_blobs(new_layers, out)
+  patch_config(deriv_attrs, new_layers, manifest, config)
 
   new_config_blob = json.dumps(config, separators=(",", ":"), sort_keys=True).encode("utf-8")
   new_config_digest = "sha256:" + hashlib.sha256(new_config_blob).hexdigest()
@@ -56,12 +58,13 @@ def diffs_main(deriv_attrs):
     _, config = load_manifest_and_config(base_oci)
     symlink_base_layer_diffs(base_diffs, out, config)
 
-  symlink_new_layer_diffs(deriv_attrs.get("appendLayers", []), out)
+  new_layers = list(parse_new_layers(deriv_attrs.get("appendLayers", [])))
+  symlink_new_layer_diffs(new_layers, out)
 
 
-def patch_config(deriv_attrs, manifest, config):
-  for layer_info in deriv_attrs.get("appendLayers", []):
-    append_layer(layer_info, manifest, config)
+def patch_config(deriv_attrs, new_layers, manifest, config):
+  for new_layer in new_layers:
+    append_layer(new_layer, manifest, config)
   apply_env(deriv_attrs.get("env", {}), config)
   if deriv_attrs.get("entrypoint") is not None:
     config.setdefault("config", {})["Entrypoint"] = deriv_attrs["entrypoint"]
@@ -71,20 +74,16 @@ def patch_config(deriv_attrs, manifest, config):
     config.setdefault("config", {})["WorkingDir"] = deriv_attrs["workingDir"]
 
 
-def append_layer(layer_info, manifest, config):
-  blob_dir = pathlib.Path(layer_info["blob"])
-  diff_dir = pathlib.Path(layer_info["diff"])
-  blob_digest = (blob_dir / "digest").read_text()
-  diff_digest = (diff_dir / "digest").read_text()
-  config.setdefault("rootfs", []).setdefault("diff_ids", []).append(diff_digest)
+def append_layer(layer, manifest, config):
+  config.setdefault("rootfs", []).setdefault("diff_ids", []).append(layer.diff_digest)
   config.setdefault("history", []).append({"created_by": "stamp.patch"})
   manifest.setdefault("layers", []).append({
     "mediaType": {
       "application/vnd.oci.image.manifest.v1+json": "application/vnd.oci.image.layer.v1.tar+gzip",
       "application/vnd.docker.distribution.manifest.v2+json": "application/vnd.docker.image.rootfs.diff.tar.gzip",
     }[manifest["mediaType"]],
-    "digest": blob_digest,
-    "size": (blob_dir / "blob.tar.gz").stat().st_size,
+    "digest": layer.blob_digest,
+    "size": layer.blob_size,
   })
 
 
@@ -109,20 +108,51 @@ def symlink_base_layer_diffs(base, out, config):
     (out / rel).symlink_to(base / rel)
 
 
-def symlink_new_layer_blobs(layer_infos, out):
-  for layer_info in layer_infos:
-    blob_dir = pathlib.Path(layer_info["blob"])
-    blob_digest = (blob_dir / "digest").read_text()
-    rel = blob_digest.replace(":", "/")
-    (out / "blobs" / rel).symlink_to(blob_dir / "blob.tar.gz")
+def symlink_new_layer_blobs(layers, out):
+  for layer in layers:
+    rel = layer.blob_digest.replace(":", "/")
+    (out / "blobs" / rel).symlink_to(layer.blob_tarball)
 
 
-def symlink_new_layer_diffs(layer_infos, out):
-  for layer_info in layer_infos:
-    diff_dir = pathlib.Path(layer_info["diff"])
-    diff_digest = (diff_dir / "digest").read_text()
-    rel = diff_digest.replace(":", "/")
-    (out / rel).symlink_to(diff_dir / "diff.tar")
+def symlink_new_layer_diffs(layers, out):
+  for layer in layers:
+    rel = layer.diff_digest.replace(":", "/")
+    (out / rel).symlink_to(layer.diff_tarball)
+
+
+@dataclass(frozen=True)
+class NewLayer:
+  diff_dir: pathlib.Path
+  blob_dir: pathlib.Path
+
+  @property
+  def diff_tarball(self):
+    return self.diff_dir / "diff.tar"
+
+  @property
+  def blob_tarball(self):
+    return self.blob_dir / "blob.tar.gz"
+
+  @property
+  def blob_size(self):
+    return self.blob_tarball.stat().st_size
+
+  @property
+  def diff_digest(self):
+    return (self.diff_dir / "digest").read_text().strip()
+
+  @property
+  def blob_digest(self):
+    return (self.blob_dir / "digest").read_text().strip()
+
+
+def parse_new_layers(superdirs):
+  for superdir in superdirs:
+    for subdir in sorted(pathlib.Path(superdir).iterdir()):
+      yield NewLayer(
+        diff_dir = (subdir / "diff").resolve(),
+        blob_dir = (subdir / "blob").resolve(),
+      )
 
 
 EMPTY_CONFIG = {

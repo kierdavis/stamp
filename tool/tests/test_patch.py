@@ -12,10 +12,7 @@ def test_patch_oci(testdata, tmp_path):
   config_path = tmp_path / "config.json"
   patch.oci_main({
     "base": str(testdata / "image1"),
-    "appendLayers": [{
-      "blob": str(testdata / "layer1/blob"),
-      "diff": str(testdata / "layer1/diff"),
-    }],
+    "appendLayers": [str(testdata / "appendlayers1")],
     "env": {
       "NEWKEY": "mockvalue",
       "PATH": "mockpath",
@@ -125,7 +122,7 @@ def test_patch_oci(testdata, tmp_path):
   compare(os.readlink(config_link_path), expected=str(config_path))
   compare(os.readlink(manifest_link_path), expected=str(manifest_path))
   compare(os.readlink(base_layer_link_path), expected=str(testdata / "image1/blobs/sha256/680548d6538925f29b19de954184c7d1f86ef3fb22b90ee3a24eb26143c093fe"))
-  compare(os.readlink(new_layer_link_path), expected=str(testdata / "layer1/blob/blob.tar.gz"))
+  compare(os.readlink(new_layer_link_path), expected=str(testdata / "appendlayers1/layer/blob/blob.tar.gz"))
 
 
 def test_patch_diffs(testdata, tmp_path):
@@ -133,9 +130,7 @@ def test_patch_diffs(testdata, tmp_path):
   patch.diffs_main({
     "base": str(testdata / "image1"),
     "baseDiffs": str(testdata / "image1-diffs"),
-    "appendLayers": [{
-      "diff": str(testdata / "layer1/diff"),
-    }],
+    "appendLayers": [str(testdata / "appendlayers1")],
     "outputs": {"out": str(out_path)},
   })
 
@@ -146,7 +141,7 @@ def test_patch_diffs(testdata, tmp_path):
   ])
 
   compare(os.readlink(base_layer_link_path), expected=str(testdata / "image1-diffs/sha256/6b40aa9e85fff948c00254614ad3e394b7232aa052d3ba7492f599bd0c01ff1b"))
-  compare(os.readlink(new_layer_link_path), expected=str(testdata / "layer1/diff/diff.tar"))
+  compare(os.readlink(new_layer_link_path), expected=str(testdata / "appendlayers1/layer/diff/diff.tar"))
 
 
 def test_patch_oci_no_base(testdata, tmp_path):
@@ -155,10 +150,7 @@ def test_patch_oci_no_base(testdata, tmp_path):
   config_path = tmp_path / "config.json"
   patch.oci_main({
     "base": None,
-    "appendLayers": [{
-      "blob": str(testdata / "layer1/blob"),
-      "diff": str(testdata / "layer1/diff"),
-    }],
+    "appendLayers": [str(testdata / "appendlayers1")],
     "env": {
       "NEWKEY": "mockvalue",
       "PATH": "mockpath",
@@ -248,15 +240,13 @@ def test_patch_oci_no_base(testdata, tmp_path):
 
   compare(os.readlink(config_link_path), expected=str(config_path))
   compare(os.readlink(manifest_link_path), expected=str(manifest_path))
-  compare(os.readlink(new_layer_link_path), expected=str(testdata / "layer1/blob/blob.tar.gz"))
+  compare(os.readlink(new_layer_link_path), expected=str(testdata / "appendlayers1/layer/blob/blob.tar.gz"))
 
 
 def test_patch_diffs_no_base(testdata, tmp_path):
   out_path = tmp_path / "out"
   patch.diffs_main({
-    "appendLayers": [{
-      "diff": str(testdata / "layer1/diff"),
-    }],
+    "appendLayers": [str(testdata / "appendlayers1")],
     "outputs": {"out": str(out_path)},
   })
 
@@ -265,4 +255,4 @@ def test_patch_diffs_no_base(testdata, tmp_path):
     "9280d2bae700a4d81f87bf46be48a145d2a5465f3e09c9c99708cf765bf7a243",
   ])
 
-  compare(os.readlink(new_layer_link_path), expected=str(testdata / "layer1/diff/diff.tar"))
+  compare(os.readlink(new_layer_link_path), expected=str(testdata / "appendlayers1/layer/diff/diff.tar"))
