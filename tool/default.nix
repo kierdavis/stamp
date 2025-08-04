@@ -135,6 +135,7 @@ let
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool patch-diffs";
           baseDiffs = if base != null then base.diffs else null;
+          preferLocalBuild = true;
         };
 
       patchOCI =
@@ -153,6 +154,7 @@ let
           outputs = [ "out" "manifest" "config" ];
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool patch-oci";
+          preferLocalBuild = true;
           # Env/Entrypoint/Cmd etc may contain Nix store paths, but they refer
           # to the image's Nix store, not the host system's.
           unsafeDiscardReferences.config = true;
