@@ -16,10 +16,10 @@ def main(deriv_attrs):
     # Select the subtree that would best satisfy the available space in the current layer.
     avail_space = target_layer_size - layer.size
     assert avail_space > 0
-    subtree_root_id = dep_graph.best_node(minimise=lambda d: abs(d["closureSize"] - avail_space))
+    subtree_root_id = dep_graph.best_node(minimise=lambda m: abs(m.closure_size - avail_space))
 
     # Remove it from the dependency graph and add it to the layer.
-    layer.path_dicts += dep_graph.pop_subtree(subtree_root_id)
+    layer.path_metas += dep_graph.pop_subtree(subtree_root_id)
 
     # If the layer is over half full (w.r.t. targetLayerSize), it's done.
     if layer.size >= target_layer_size // 2:
@@ -38,20 +38,28 @@ def main(deriv_attrs):
 
 
 @dataclass
+class PathMeta:
+  path: str
+  size: int # bytes
+  closure_size: int
+  refs: set = field(default_factory=set)
+
+
+@dataclass
 class Layer:
-  path_dicts: list = field(default_factory=list)
+  path_metas: list = field(default_factory=list)
 
   @property
   def is_empty(self):
-    return not self.path_dicts
+    return not self.path_metas
 
   @property
   def paths(self):
-    return (d["path"] for d in self.path_dicts)
+    return (m.path for m in self.path_metas)
 
   @property
   def size(self):
-    return sum(d["narSize"] for d in self.path_dicts)
+    return sum(m.size for m in self.path_metas)
 
 
 class DepGraph:
@@ -79,10 +87,8 @@ class DepGraph:
       /nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66
     """
 
-    closure_info_path = pathlib.Path(closure_info_path)
-
-    path_dicts = []
-    with open(closure_info_path / "registration") as f:
+    metas = []
+    with open(pathlib.Path(closure_info_path) / "registration") as f:
       while True:
         path = f.readline().rstrip("\n")
         if not path:
@@ -92,28 +98,28 @@ class DepGraph:
         f.readline()
         n_refs = int(f.readline().rstrip("\n"))
         refs = {f.readline().rstrip("\n") for _ in range(n_refs)}
-        path_dicts.append({"path": path, "narSize": size, "references": refs})
+        metas.append(PathMeta(path=path, size=size, closure_size=None, refs=refs))
 
     # For some efficiency, let's memoize the store paths by assigning a unique
     # identifying integer to each one. We'll assume that Nix will never give us
-    # two dicts for the same `path`, and simply use the dict's position in the
+    # two dicts for the same `path`, and simply use the path's position in the
     # input file as the identifying integer.
-    self._id_to_dict = path_dicts
+    self._id_to_meta = metas
 
     # Set up a mapping from path strings to their corresponding integers.
-    self._path_to_id = {d["path"]: i for i, d in enumerate(self._id_to_dict)}
+    self._path_to_id = {m.path: i for i, m in enumerate(self._id_to_meta)}
 
-    # Map the `references` member of each dict from a collection of path
-    # strings to a collection of identifying integers. Also, sometimes a
-    # path declares a dependency on itself - we'll go ahead and remove these
-    # self-loops from the dependency graph now.
-    for d in self._id_to_dict:
-      d["references"] = {self._path_to_id[p] for p in d["references"] if p != d["path"]}
+    # Map each `refs` from a collection of path strings to a collection of
+    # identifying integers. Also, sometimes a path declares a dependency on
+    # itself - we'll go ahead and remove these self-loops from the dependency
+    # graph now.
+    for m in self._id_to_meta:
+      m.refs = {self._path_to_id[p] for p in m.refs if p != m.path}
 
     # Calculate a topological order of the dependency graph.
     tsort = graphlib.TopologicalSorter()
-    for i, d in enumerate(self._id_to_dict):
-      tsort.add(i, *d["references"])
+    for i, m in enumerate(self._id_to_meta):
+      tsort.add(i, *m.refs)
     self._ids_depth_first = list(tsort.static_order())
 
     self._recompute_closure_sizes()
@@ -124,13 +130,13 @@ class DepGraph:
 
   @property
   def is_empty(self):
-    return all(d is None for d in self._id_to_dict)
+    return all(m is None for m in self._id_to_meta)
 
   def best_node(self, *, minimise):
     return min(
       filter(
         lambda tup: tup[1] is not None,
-        enumerate(self._id_to_dict),
+        enumerate(self._id_to_meta),
       ),
       key=lambda tup: minimise(tup[1]),
     )[0]
@@ -139,24 +145,24 @@ class DepGraph:
     node_ids = {root_id}
     for i in self._ids_depth_last:
       if i in node_ids:
-        node_ids |= self._id_to_dict[i]["references"]
+        node_ids |= self._id_to_meta[i].refs
     return self.pop(*node_ids)
 
   def pop(self, *node_ids):
-    node_dicts = [self._id_to_dict[i] for i in node_ids]
+    metas = [self._id_to_meta[i] for i in node_ids]
     for i in node_ids:
-      self._id_to_dict[i] = None
-    for d in self._id_to_dict:
-      if d is not None:
-        d["references"].difference_update(node_ids)
+      self._id_to_meta[i] = None
+    for m in self._id_to_meta:
+      if m is not None:
+        m.refs.difference_update(node_ids)
     self._recompute_closure_sizes()
-    return node_dicts
+    return metas
 
   def _recompute_closure_sizes(self):
     for i in self._ids_depth_first:
-      d = self._id_to_dict[i]
-      if d is not None:
-        d["closureSize"] = d["narSize"] + sum(
-          self._id_to_dict[ii]["closureSize"]
-          for ii in d["references"]
+      m = self._id_to_meta[i]
+      if m is not None:
+        m.closure_size = m.size + sum(
+          self._id_to_meta[ii].closure_size
+          for ii in m.refs
         )
