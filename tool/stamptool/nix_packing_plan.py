@@ -55,29 +55,50 @@ class Layer:
 
 
 class DepGraph:
-  def __init__(self, path_dicts):
+  def __init__(self, closure_info_path):
     """
-    `path_dicts` should be of the form:
-      [
-        {
-          "path": "/nix/store/0046rn5sgi6l38zl81bg2r02zlzxqqbc-libXext-1.3.6",
-          "narSize": 96504,         # size occupied by path, in bytes
-          "closureSize": 37164352,  # sum of narSizes of all paths in this path's closure
-          "references": [
-            "/nix/store/0046rn5sgi6l38zl81bg2r02zlzxqqbc-libXext-1.3.6",
-            "/nix/store/1nsvsrqp5zm96r9p3rrq3yhlyw8jiy91-libX11-1.8.12",
-            "/nix/store/zdpby3l6azi78sl83cpad2qjpfj25aqx-glibc-2.40-66",
-          ],
-        },
-        ...
-      ]
+    `closure_info_path` should be the path to a directory containing a file
+    named `registration`, which should be formed of one or more instances of
+    the following sequence of lines:
+      [store path]
+      [arbitrary]
+      [size occupied by path, in bytes]
+      [arbitrary]
+      [number of store paths referred to by this path]
+      [referenced path 0]
+      [referenced path 1]
+      ...
+    For example:
+      /nix/store/0dqmgjr0jsc2s75sbgdvkk7d08zx5g61-libgcrypt-1.10.3-lib
+      sha256:18irhz8220sy6x34mlyjvp5sqa8fw0jrcxxdivkgl01ps7nhqh5a
+      1463016
+
+      3
+      /nix/store/0dqmgjr0jsc2s75sbgdvkk7d08zx5g61-libgcrypt-1.10.3-lib
+      /nix/store/9z7wv6k9i38k83xpbgqcapaxhdkbaqhz-libgpg-error-1.51
+      /nix/store/cg9s562sa33k78m63njfn1rw47dp9z0i-glibc-2.40-66
     """
+
+    closure_info_path = pathlib.Path(closure_info_path)
+
+    path_dicts = []
+    with open(closure_info_path / "registration") as f:
+      while True:
+        path = f.readline().rstrip("\n")
+        if not path:
+          break
+        f.readline()
+        size = int(f.readline().rstrip("\n"))
+        f.readline()
+        n_refs = int(f.readline().rstrip("\n"))
+        refs = {f.readline().rstrip("\n") for _ in range(n_refs)}
+        path_dicts.append({"path": path, "narSize": size, "references": refs})
 
     # For some efficiency, let's memoize the store paths by assigning a unique
     # identifying integer to each one. We'll assume that Nix will never give us
     # two dicts for the same `path`, and simply use the dict's position in the
-    # provided list as the identifying integer.
-    self._id_to_dict = list(path_dicts)
+    # input file as the identifying integer.
+    self._id_to_dict = path_dicts
 
     # Set up a mapping from path strings to their corresponding integers.
     self._path_to_id = {d["path"]: i for i, d in enumerate(self._id_to_dict)}
@@ -94,6 +115,8 @@ class DepGraph:
     for i, d in enumerate(self._id_to_dict):
       tsort.add(i, *d["references"])
     self._ids_depth_first = list(tsort.static_order())
+
+    self._recompute_closure_sizes()
 
   @property
   def _ids_depth_last(self):

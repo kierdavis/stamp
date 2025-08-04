@@ -110,10 +110,11 @@ with self;
           ++ (if entrypoint != null then entrypoint else [])
           ++ (if cmd != null then cmd else [])
         );
+        closureInfo' = closureInfo { rootPaths = storeRoots; };
         packingPlan = stamp.internal.tool.nixPackingPlan {
           inherit targetLayerSize;
           name = "${name}-packing-plan";
-          roots = storeRoots;
+          closureInfo = closureInfo';
         };
         mkStoreLayer = fileName: _: let
           pathsFile = "${packingPlan}/${fileName}";
@@ -123,7 +124,7 @@ with self;
         };
         storeLayers = lib.mapAttrsToList mkStoreLayer (builtins.readDir packingPlan);
         copy = lib.optional withRegistration {
-          src = "${closureInfo { rootPaths = storeRoots; }}/registration";
+          src = "${closureInfo'}/registration";
           dest = "/nix-path-registration";
         };
       in stamp.patch {

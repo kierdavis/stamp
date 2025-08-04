@@ -97,16 +97,15 @@ let
 
       nixPackingPlan =
         { name ? "stamp-nix-packing-plan"
-        , roots
+        , closureInfo
         , targetLayerSize
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name targetLayerSize passthru;
+          inherit name closureInfo targetLayerSize passthru;
           __structuredAttrs = true;
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool nix-packing-plan";
-          exportReferencesGraph.closureInfo = roots;
         };
 
       nixStoreLayerDiff =

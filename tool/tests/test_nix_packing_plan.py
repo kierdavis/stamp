@@ -1,9 +1,10 @@
 from stamptool import nix_packing_plan
 from testfixtures import compare
-from textwrap import dedent
 from .conftest import compare_dir_entries
 
 
+# Rationale for the closure structure used in this test:
+#
 #       ddd
 #      /   \
 #   bbb     fff
@@ -24,50 +25,6 @@ from .conftest import compare_dir_entries
 #   * The third layer emitted should be fff.
 #   * The fourth and final layer emitted should be ddd.
 #
-closure_info = [
-  {
-    "path": "/mockstore/aaa",
-    "narSize": 266,
-    "closureSize": 266,
-    "references": [],
-  },
-  {
-    "path": "/mockstore/bbb",
-    "narSize": 100,
-    "closureSize": 405,
-    "references": ["/mockstore/aaa", "/mockstore/bbb", "/mockstore/ccc"],
-  },
-  {
-    "path": "/mockstore/ccc",
-    "narSize": 39,
-    "closureSize": 39,
-    "references": [],
-  },
-  {
-    "path": "/mockstore/ddd",
-    "narSize": 45,
-    "closureSize": 1660,
-    "references": ["/mockstore/bbb", "/mockstore/fff"],
-  },
-  {
-    "path": "/mockstore/eee",
-    "narSize": 221,
-    "closureSize": 221,
-    "references": [],
-  },
-  {
-    "path": "/mockstore/fff",
-    "narSize": 901,
-    "closureSize": 1210,
-    "references": ["/mockstore/eee", "/mockstore/ggg"],
-  },
-  {
-    "path": "/mockstore/ggg",
-    "narSize": 88,
-    "closureSize": 88,
-    "references": [],
-  },
-]
 
 
 expected_plan = {
@@ -78,10 +35,10 @@ expected_plan = {
 }
 
 
-def test_nix_packing_plan(tmp_path):
+def test_nix_packing_plan(testdata, tmp_path):
   out_dir = tmp_path / "out"
   nix_packing_plan.main({
-    "closureInfo": closure_info,
+    "closureInfo": str(testdata / "closureinfo1"),
     "targetLayerSize": 500,
     "outputs": {"out": str(out_dir)},
   })
