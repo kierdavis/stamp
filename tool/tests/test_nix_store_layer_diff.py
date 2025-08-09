@@ -1,3 +1,4 @@
+import hashlib
 from stamptool import nix_store_layer_diff
 from tarfile import DIRTYPE, REGTYPE, SYMTYPE
 from testfixtures import compare
@@ -21,4 +22,14 @@ def test_nix_store_layer_diff(testdata, tmp_path):
     dict(name=str(path_in_tar / "hello.txt"), size=14, mtime=1001, mode=0o644, type=REGTYPE, uid=0, gid=0, uname="", gname=""),
     dict(name=str(path_in_tar / "world.txt"), size=0, mtime=1001, type=SYMTYPE, linkname="hello.txt", uid=0, gid=0, uname="", gname=""),
   ])
-  compare(digest_path.read_text(), expected="sha256:520c1e8da14bd3000d689ae900c8383d3516147b22b3e9101a1346a78fa21aa1")
+
+  # We can't hardcode the expected digest here because the filenames in the
+  # archive are based on the location of testdata on the build host.
+  h = hashlib.sha256()
+  with open(tar_path, "rb") as f:
+    while True:
+      chunk = f.read(4096)
+      if not chunk:
+        break
+      h.update(chunk)
+  compare(digest_path.read_text(), expected="sha256:" + h.hexdigest())
