@@ -10,7 +10,7 @@ drv_path=$(
   --extra-experimental-features flakes \
   path-info \
   --derivation \
-  --override-input stamp "path:$stamp_dir" \
+  --override-input stamp "$stamp_dir" \
   --show-trace \
   "$flake"
 )
