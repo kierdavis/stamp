@@ -21,8 +21,8 @@ def main(deriv_attrs):
   if deriv_attrs.get("runInContainer"):
     do_run_in_container(deriv_attrs, content_dir, rt)
 
-  out_dir = pathlib.Path(deriv_attrs["outputs"]["out"])
-  pack(content_dir, out_dir, uid_handling)
+  out_path = pathlib.Path(deriv_attrs["outputs"]["out"])
+  pack(content_dir, out_path, uid_handling)
 
 
 def do_copy(elems, content_dir, uid_handling):
@@ -68,38 +68,20 @@ def do_run_in_container(deriv_attrs, content_dir, rt):
   )
 
 
-def pack(content_dir, out_dir, uid_handling):
-  out_dir.mkdir(parents=True, exist_ok=True)
-  tar_path = out_dir / "diff.tar"
-  digest_path = out_dir / "digest"
-
+def pack(content_dir, out_path, uid_handling):
   tar_args = sorted(x.name for x in content_dir.iterdir())
-  tar_proc = subprocess.Popen(
+  subprocess.run(
     [
       "tar",
       "--create",
       f"--directory={content_dir}",
+      f"--file={out_path}",
       "--numeric-owner",
       f"--mtime=@{os.environ['SOURCE_DATE_EPOCH']}",
       "--sort=name",
     ] + uid_handling.pack_opts + tar_args,
     stdout=subprocess.PIPE,
   )
-  tee_proc = subprocess.Popen(
-    ["tee", str(tar_path)],
-    stdin=tar_proc.stdout,
-    stdout=subprocess.PIPE,
-  )
-  sha256sum_proc = subprocess.Popen(
-    ["sha256sum"],
-    stdin=tee_proc.stdout,
-    stdout=subprocess.PIPE,
-  )
-  for proc in [tar_proc, tee_proc, sha256sum_proc]:
-    if proc.wait() != 0:
-      raise subprocess.CalledProcessError(returncode=proc.returncode, cmd=repr(proc.args))
-
-  digest_path.write_bytes(b"sha256:" + sha256sum_proc.stdout.read().split()[0])
 
 
 def is_root():

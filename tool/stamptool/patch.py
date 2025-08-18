@@ -18,7 +18,7 @@ def oci_main(deriv_attrs):
   else:
     manifest, config = EMPTY_MANIFEST, EMPTY_CONFIG
 
-  new_layers = list(parse_new_layers(deriv_attrs.get("appendLayers", [])))
+  new_layers = [NewLayer.from_arg_dict(x) for x in deriv_attrs.get("appendLayers", [])]
   symlink_new_layer_blobs(new_layers, out)
   patch_config(deriv_attrs, new_layers, manifest, config)
 
@@ -58,7 +58,7 @@ def diffs_main(deriv_attrs):
     _, config = load_manifest_and_config(base_oci)
     symlink_base_layer_diffs(base_diffs, out, config)
 
-  new_layers = list(parse_new_layers(deriv_attrs.get("appendLayers", [])))
+  new_layers = [NewLayer.from_arg_dict(x) for x in deriv_attrs.get("appendLayers", [])]
   symlink_new_layer_diffs(new_layers, out)
 
 
@@ -122,37 +122,23 @@ def symlink_new_layer_diffs(layers, out):
 
 @dataclass(frozen=True)
 class NewLayer:
-  diff_dir: pathlib.Path
-  blob_dir: pathlib.Path
+  diff_tarball: pathlib.Path
+  blob_tarball: pathlib.Path
+  diff_digest: str
+  blob_digest: str
 
-  @property
-  def diff_tarball(self):
-    return self.diff_dir / "diff.tar"
-
-  @property
-  def blob_tarball(self):
-    return self.blob_dir / "blob.tar.gz"
+  @classmethod
+  def from_arg_dict(cls, d):
+    return cls(
+      diff_tarball = pathlib.Path(d["diffTarball"]) if "diffTarball" in d else None,
+      blob_tarball = pathlib.Path(d["blobTarball"]) if "blobTarball" in d else None,
+      diff_digest = pathlib.Path(d["diffDigest"]).read_text().strip() if "diffDigest" in d else None,
+      blob_digest = pathlib.Path(d["blobDigest"]).read_text().strip() if "blobDigest" in d else None,
+    )
 
   @property
   def blob_size(self):
     return self.blob_tarball.stat().st_size
-
-  @property
-  def diff_digest(self):
-    return (self.diff_dir / "digest").read_text().strip()
-
-  @property
-  def blob_digest(self):
-    return (self.blob_dir / "digest").read_text().strip()
-
-
-def parse_new_layers(superdirs):
-  for superdir in superdirs:
-    for subdir in sorted(pathlib.Path(superdir).iterdir()):
-      yield NewLayer(
-        diff_dir = (subdir / "diff").resolve(),
-        blob_dir = (subdir / "blob").resolve(),
-      )
 
 
 EMPTY_CONFIG = {

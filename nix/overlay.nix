@@ -19,6 +19,7 @@ with self;
           inherit name repository digest;
           nativeBuildInputs = [ crane ];
           buildCommand = ''crane pull --format=oci "$repository@$digest" "$out"'';
+          preferLocalBuild = true;
           outputHash = hash;
           outputHashMode = "recursive";
           passthru = passthru';
@@ -169,6 +170,44 @@ with self;
         paths = builtins.map (groups: builtins.elemAt groups 0) (builtins.filter builtins.isList split);
       in builtins.map (path: builtins.appendContext path ctx) paths;
 
+      digest =
+        { name ? "${src.name}-digest"
+        , src
+        , passthru ? {}
+        }:
+        stdenvNoCC.mkDerivation {
+          inherit name src passthru;
+          buildCommand = ''( echo -n sha256: && sha256sum "$src" | cut -d ' ' -f 1 ) > "$out"'';
+          preferLocalBuild = true;
+        };
+
+      layerFromDiffTarball =
+        { name ? lib.strings.removeSuffix "-diff.tar" diffTarball.name
+        , src
+        , passthru ? {}
+        }:
+        let
+          passthru' = { inherit diffTarball blobTarball diffDigest blobDigest; } // passthru;
+          diffTarball = if src ? overrideAttrs
+            then src.overrideAttrs (oldAttrs: { passthru = passthru' // (oldAttrs.passthru or {}); })
+            else src;
+          blobTarball = stdenvNoCC.mkDerivation {
+            inherit diffTarball;
+            name = "${name}-blob.tar.gz";
+            nativeBuildInputs = [ pigz ];
+            buildCommand = ''pigz --stdout --processes ''${NIX_BUILD_CORES:-1} --no-name --no-time "$diffTarball" > "$out"'';
+            passthru = passthru';
+          };
+          diffDigest = stamp.internal.digest {
+            src = diffTarball;
+            passthru = passthru';
+          };
+          blobDigest = stamp.internal.digest {
+            src = blobTarball;
+            passthru = passthru';
+          };
+        in blobTarball;
+
       layer =
         { name ? "stamp-layer"
         , copy ? []
@@ -182,58 +221,34 @@ with self;
         , hash ? null
         , passthru ? {}
         }:
-        let
-          passthru' = { inherit diff blob dir; } // passthru;
-          diff = stamp.internal.tool.layerDiff {
+        stamp.internal.layerFromDiffTarball {
+          inherit name passthru;
+          src = stamp.internal.tool.layerDiff {
             inherit copy runOnHost runOnHostUID runOnHostGID runInContainer runInContainerBase vmDiskSize vmMemory hash;
-            name = "${name}-diff";
-            passthru = passthru';
+            name = "${name}-diff.tar";
           };
-          blob = stamp.internal.tool.layerBlob {
-            inherit diff;
-            name = "${name}-blob";
-            passthru = passthru';
-          };
-          dir = stdenvNoCC.mkDerivation {
-            inherit name diff blob;
-            buildCommand = ''
-              mkdir -p $out/layer
-              ln -sfT $diff $out/layer/diff
-              ln -sfT $blob $out/layer/blob
-            '';
-            preferLocalBuild = true;
-            passthru = passthru';
-          };
-        in dir;
+        };
 
       nixStoreLayer =
-        { paths
+        { name ? "stamp-layer-nix-store"
+        , paths
         , passthru ? {}
         }:
-        let
-          passthru' = { inherit paths diff blob dir; } // passthru;
-          diff = stamp.internal.tool.nixStoreLayerDiff {
+        stamp.internal.layerFromDiffTarball {
+          inherit name;
+          src = stdenvNoCC.mkDerivation {
             inherit paths;
-            name = "stamp-layer-nix-store-diff";
-            passthru = passthru';
-          };
-          blob = stamp.internal.tool.layerBlob {
-            inherit diff;
-            name = "stamp-layer-nix-store-blob";
-            passthru = passthru';
-          };
-          dir = stdenvNoCC.mkDerivation {
-            inherit diff blob;
-            name = "stamp-layer-nix-store";
-            buildCommand = ''
-              mkdir -p $out/layer
-              ln -sfT $diff $out/layer/diff
-              ln -sfT $blob $out/layer/blob
-            '';
+            name = "${name}-diff.tar";
+            buildCommand = ''tar --create --directory=/ --file="$out" --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE_EPOCH" --sort=name "''${paths[@]#/}"'';
             preferLocalBuild = true;
-            passthru = passthru';
+            # diffs may contain Nix store paths, but they refer to the image's
+            # Nix store, not the host system's.
+            unsafeDiscardReferences.out = true;
+            # required by unsafeDiscardReferences
+            __structuredAttrs = true;
           };
-        in dir;
+          passthru = { inherit paths; } // passthru;
+        };
     };
   };
 }

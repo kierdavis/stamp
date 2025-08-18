@@ -1,5 +1,4 @@
 { e2fsprogs
-, gnutar
 , lib
 , pigz
 , python3
@@ -16,7 +15,7 @@ let
     pyproject = true;
     src = builtins.filterSource (path: type: baseNameOf path != "default.nix") ./.;
     build-system = with python3.pkgs; [ setuptools ];
-    nativeCheckInputs = with python3.pkgs; [ gnutar pigz pytestCheckHook rsync testfixtures ];
+    nativeCheckInputs = with python3.pkgs; [ pigz pytestCheckHook rsync testfixtures ];
 
     passthru = {
       extractDiffs =
@@ -32,18 +31,6 @@ let
           # diffs may contain Nix store paths, but they refer to the image's
           # Nix store, not the host system's.
           unsafeDiscardReferences.out = true;
-        };
-
-      layerBlob =
-        { name ? "stamp-layer-blob"
-        , diff
-        , passthru ? {}
-        }:
-        stdenvNoCC.mkDerivation {
-          inherit name diff passthru;
-          __structuredAttrs = true;
-          nativeBuildInputs = [ self pigz ];
-          buildCommand = "stamptool layer-blob";
         };
 
       layerDiff =
@@ -66,7 +53,7 @@ let
           drv = stdenvNoCC.mkDerivation ({
             inherit name copy runOnHost runOnHostUID runOnHostGID runInContainer runInContainerBase passthru;
             __structuredAttrs = true;
-            nativeBuildInputs = [ self gnutar rsync ];
+            nativeBuildInputs = [ self rsync ];
             buildCommand = "stamptool layer-diff";
             runInContainerBaseDiffs = if runInContainerBase != null then runInContainerBase.diffs else null;
             # diffs may contain Nix store paths, but they refer to the image's
@@ -106,21 +93,7 @@ let
           __structuredAttrs = true;
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool nix-packing-plan";
-        };
-
-      nixStoreLayerDiff =
-        { name ? "stamp-nix-store-layer-diff"
-        , paths
-        , passthru ? {}
-        }:
-        stdenvNoCC.mkDerivation {
-          inherit name paths passthru;
-          __structuredAttrs = true;
-          nativeBuildInputs = [ self gnutar ];
-          buildCommand = "stamptool nix-store-layer-diff";
-          # diffs may contain Nix store paths, but they refer to the image's
-          # Nix store, not the host system's.
-          unsafeDiscardReferences.diff = true;
+          preferLocalBuild = true;
         };
 
       patchDiffs =
@@ -130,11 +103,12 @@ let
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name base appendLayers passthru;
+          inherit name base passthru;
           __structuredAttrs = true;
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool patch-diffs";
           baseDiffs = if base != null then base.diffs else null;
+          appendLayers = builtins.map (lay: { inherit (lay) diffTarball diffDigest; }) appendLayers;
           preferLocalBuild = true;
         };
 
@@ -149,11 +123,12 @@ let
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name base appendLayers env entrypoint cmd workingDir passthru;
+          inherit name base env entrypoint cmd workingDir passthru;
           __structuredAttrs = true;
           outputs = [ "out" "manifest" "config" ];
           nativeBuildInputs = [ self ];
           buildCommand = "stamptool patch-oci";
+          appendLayers = builtins.map (lay: { inherit (lay) blobTarball blobDigest diffDigest; }) appendLayers;
           preferLocalBuild = true;
           # Env/Entrypoint/Cmd etc may contain Nix store paths, but they refer
           # to the image's Nix store, not the host system's.
