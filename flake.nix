@@ -16,6 +16,12 @@
         system = "x86_64-linux";
         overlays = [ self.overlays.default ];
       };
-    in { inherit (pkgs) stamp; };
+    in {
+      inherit (pkgs.stamp.internal) tool;
+    };
+
+    hydraJobs = {
+      tool."x86_64-linux" = self.packages."x86_64-linux".tool;
+    };
   };
 }
