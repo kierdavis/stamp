@@ -40,9 +40,10 @@ with self;
       , runOnHostUID ? 0
       , runOnHostGID ? runOnHostUID
       , runInContainer ? ""
-      , env ? {}
-      , entrypoint ? null
       , cmd ? null
+      , entrypoint ? null
+      , env ? {}
+      , user ? null
       , workingDir ? null
       , vmDiskSize ? 2048 # MB
       , vmMemory ? 512    # MB
@@ -61,7 +62,7 @@ with self;
         appendLayers' = appendLayers ++ lib.optional (implicitLayer != null) implicitLayer;
         passthru' = { inherit oci diffs implicitLayer; } // passthru;
         oci = stamp.internal.tool.patchOCI {
-          inherit name base env entrypoint cmd workingDir;
+          inherit name base cmd entrypoint env user workingDir;
           appendLayers = appendLayers';
           passthru = passthru';
         };
@@ -77,9 +78,10 @@ with self;
       { name ? "stamp-img-nix"
       , runOnHost ? ""
       , runInContainer ? ""
-      , env ? {}
-      , entrypoint ? null
       , cmd ? null
+      , entrypoint ? null
+      , env ? {}
+      , user ? null
       , workingDir ? null
       , targetLayerSize ? stamp.defaultTargetLayerSize # bytes
       , withRegistration ? false
@@ -128,7 +130,7 @@ with self;
           dest = "/nix-path-registration";
         };
       in stamp.patch {
-        inherit name copy runInContainer entrypoint cmd workingDir vmDiskSize vmMemory;
+        inherit name copy runInContainer cmd entrypoint user workingDir vmDiskSize vmMemory;
         appendLayers = storeLayers;
         runOnHost = runOnHost';
         env = env';

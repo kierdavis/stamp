@@ -116,14 +116,15 @@ let
         { name ? "stamp-patch-oci"
         , base ? null
         , appendLayers ? []
-        , env ? {}
-        , entrypoint ? null
         , cmd ? null
+        , entrypoint ? null
+        , env ? {}
+        , user ? null
         , workingDir ? null
         , passthru ? {}
         }:
         stdenvNoCC.mkDerivation {
-          inherit name base env entrypoint cmd workingDir passthru;
+          inherit name base cmd entrypoint env user workingDir passthru;
           __structuredAttrs = true;
           outputs = [ "out" "manifest" "config" ];
           nativeBuildInputs = [ self ];

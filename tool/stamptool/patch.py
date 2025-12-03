@@ -66,10 +66,12 @@ def patch_config(deriv_attrs, new_layers, manifest, config):
   for new_layer in new_layers:
     append_layer(new_layer, manifest, config)
   apply_env(deriv_attrs.get("env", {}), config)
-  if deriv_attrs.get("entrypoint") is not None:
-    config.setdefault("config", {})["Entrypoint"] = deriv_attrs["entrypoint"]
   if deriv_attrs.get("cmd") is not None:
     config.setdefault("config", {})["Cmd"] = deriv_attrs["cmd"]
+  if deriv_attrs.get("entrypoint") is not None:
+    config.setdefault("config", {})["Entrypoint"] = deriv_attrs["entrypoint"]
+  if deriv_attrs.get("user") is not None:
+    config.setdefault("config", {})["User"] = deriv_attrs["user"]
   if deriv_attrs.get("workingDir") is not None:
     config.setdefault("config", {})["WorkingDir"] = deriv_attrs["workingDir"]
 

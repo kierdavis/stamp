@@ -24,12 +24,13 @@ def test_patch_oci(testdata, append_layers, tmp_path):
   patch.oci_main({
     "base": str(testdata / "image1"),
     "appendLayers": append_layers,
+    "cmd": ["mockcmd"],
+    "entrypoint": ["mockentrypoint"],
     "env": {
       "NEWKEY": "mockvalue",
       "PATH": "mockpath",
     },
-    "entrypoint": ["mockentrypoint"],
-    "cmd": ["mockcmd"],
+    "user": "mockuser:mockgroup",
     "workingDir": "/mock/working/dir",
     "outputs": {
       "out": str(out_path),
@@ -52,6 +53,7 @@ def test_patch_oci(testdata, append_layers, tmp_path):
       "Labels": {
         "io.buildah.version": "1.37.3"
       },
+      "User": "mockuser:mockgroup",
       "WorkingDir": "/mock/working/dir",
     },
     "created": "2025-07-12T17:51:20.151387201Z",
@@ -73,8 +75,8 @@ def test_patch_oci(testdata, append_layers, tmp_path):
       "type": "layers"
     }
   })
-  compare(config_sha256, expected="e05f8a98593f434361df1a00351790211e6d49a9c3f218ce4eab19da44e1b2fe")
-  compare(len(config_bytes), expected=647)
+  compare(config_sha256, expected="47b32e78ed79d531ddff45902c1c50db361b04428b6bf7705290768726afd770")
+  compare(len(config_bytes), expected=675)
 
   manifest_bytes = manifest_path.read_bytes()
   manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
@@ -103,7 +105,7 @@ def test_patch_oci(testdata, append_layers, tmp_path):
       "org.opencontainers.image.base.name": ""
     }
   })
-  compare(manifest_sha256, expected="3cb500edc295f65525d1cdf217ee5a1bc060dfe8a1fc0c1d6de78c6c601535ed")
+  compare(manifest_sha256, expected="61ed7663d0dfea2b1629f35b52257a1088a167cde2ed92c046abb70f89e3d340")
   compare(len(manifest_bytes), expected=653)
 
   [blobs_path, index_path, oci_layout_path] = compare_dir_entries(out_path, expected=["blobs", "index.json", "oci-layout"])
@@ -162,12 +164,13 @@ def test_patch_oci_no_base(testdata, append_layers, tmp_path):
   patch.oci_main({
     "base": None,
     "appendLayers": append_layers,
+    "cmd": ["mockcmd"],
+    "entrypoint": ["mockentrypoint"],
     "env": {
       "NEWKEY": "mockvalue",
       "PATH": "mockpath",
     },
-    "entrypoint": ["mockentrypoint"],
-    "cmd": ["mockcmd"],
+    "user": "mockuser:mockgroup",
     "workingDir": "/mock/working/dir",
     "outputs": {
       "out": str(out_path),
@@ -187,6 +190,7 @@ def test_patch_oci_no_base(testdata, append_layers, tmp_path):
         "NEWKEY=mockvalue",
         "PATH=mockpath"
       ],
+      "User": "mockuser:mockgroup",
       "WorkingDir": "/mock/working/dir",
     },
     "history": [
@@ -202,8 +206,8 @@ def test_patch_oci_no_base(testdata, append_layers, tmp_path):
       "type": "layers"
     }
   })
-  compare(config_sha256, expected="a7ad8bade6fe0adc9783533678890b16fc103ac9ff618c4836c78f6ad71b229b")
-  compare(len(config_bytes), expected=329)
+  compare(config_sha256, expected="2c447085d93501c8efce5ca78d9964314702a101b5a2ca91f0636b51ad3560c2")
+  compare(len(config_bytes), expected=357)
 
   manifest_bytes = manifest_path.read_bytes()
   manifest_sha256 = hashlib.sha256(manifest_bytes).hexdigest()
@@ -223,7 +227,7 @@ def test_patch_oci_no_base(testdata, append_layers, tmp_path):
       }
     ]
   })
-  compare(manifest_sha256, expected="e1900c2198c8e3adbdf6e053e244c3d93d6bbfab04d8c138180b4754ff380dd4")
+  compare(manifest_sha256, expected="30403b9b383359f75afe26f4d424cc69080323ab934b4de5501575599a78327e")
   compare(len(manifest_bytes), expected=401)
 
   [blobs_path, index_path, oci_layout_path] = compare_dir_entries(out_path, expected=["blobs", "index.json", "oci-layout"])
