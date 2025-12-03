@@ -92,7 +92,7 @@ with self;
       }:
       let
         runOnHost' = lib.optionalString withConveniences ''
-          mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp usr
+          mkdir -p bin etc/pki/tls/certs etc/ssl/certs tmp usr var/empty
           ln -sfT "${bash}/bin/bash" bin/bash
           ln -sfT "${bash}/bin/bash" bin/sh
           ln -sfT "${busybox}/bin/env" bin/env
