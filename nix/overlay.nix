@@ -141,6 +141,7 @@ with self;
       { name ? stamp.internal.defaultPatchDrvName base
       , base
       , pkgs
+      , preInstall ? ""
       , vmDiskSize ? 2048 # MB
       , vmMemory ? 512    # MB
       , layerHash ? null
@@ -150,6 +151,7 @@ with self;
         inherit name base vmDiskSize vmMemory layerHash passthru;
         copy = builtins.map (src: { inherit src; dest = "/imgbuild/${src.name}"; }) pkgs;
         runInContainer = ''
+          ${preInstall}
           apt install -y /imgbuild/*
           truncate --size=0 /var/cache/ldconfig/aux-cache /var/log/apt/history.log /var/log/apt/term.log /var/log/dpkg.log
           rm -rf /imgbuild
