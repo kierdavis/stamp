@@ -44,7 +44,7 @@ variable "gc_root_dir" {
 }
 
 module "build" {
-  source                    = "github.com/kierdavis/nix-realisation?ref=4bd3271a196cb2b2902ec023f794efe78eabfcca"
+  source                    = "github.com/kierdavis/nix-realisation?ref=da1a0c5c2dd113990eda27990ea56e05d0866b88"
   flake_output              = var.flake_output
   eval_options              = concat(["--override-input", "stamp", path.module], var.eval_options)
   create_derivation_gc_root = var.create_derivation_gc_root
